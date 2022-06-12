@@ -1,4 +1,4 @@
-# tiny-php-comment-system-ssg
+# tiny php comment system ssg
 Tiny PHP comment system for SSG like Hugo (1 file)
 
 # Install
