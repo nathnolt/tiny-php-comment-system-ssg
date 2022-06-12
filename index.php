@@ -263,13 +263,13 @@ if(count($comments) == 0) {
 		
 		
 		<div class="user">
-			From: <strong><?php echo htmlspecialchars($comment['commentor']); ?></strong>
+			From: <strong><?= htmlspecialchars($comment['commentor']); ?></strong>
 		</div>
 		<div class="message">
-			<?php echo htmlspecialchars($comment['comment']); ?>
+			<?= htmlspecialchars($comment['comment']); ?>
 		</div>
 		<div>
-			<em><?php echo getAgoStr($comment['datetime_'], 3); ?></em>
+			<em><?= getAgoStr($comment['datetime_'], 3); ?></em>
 		</div>
 		<br>
 	</article>
@@ -300,7 +300,11 @@ if(count($comments) == 0) {
 <?php
 } // end of function drawComments
 
-// 9. define some helper functions
+//
+// helper functions
+// 
+
+// 9. get the url itself, with or without some url params
 function getSelf($add, $remove) {
 	// 1. get the protocol
 	$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? 'https://' : 'http://';
