@@ -6,6 +6,10 @@ if(false) {
 	error_reporting(E_ALL);
 }
 
+// 1. turn off output buffering, this will make sure content will be displayed as quickly as possible, 
+// although the entire runtime might be lower, but considering the faster response time, it's probably worth it.
+ob_end_flush();
+
 // 1. set the default time zone
 date_default_timezone_set('UTC');
 
@@ -15,7 +19,7 @@ if(
 	!empty($_GET['slug']) && 
 	gettype($_GET['slug']) == 'string'
 ) {
-	$rawPostSlug = $_GET['slug'];
+	$rawPostSlug = trim($_GET['slug']);
 } else {
 	if(!isset($_SERVER['PATH_INFO'])) {
 		$pathInfo = '/';
@@ -24,11 +28,12 @@ if(
 	}
 	// Remove the first character (/)
 	$pathInfo = substr($pathInfo, 1);
-	$rawPostSlug = $pathInfo;
+	$rawPostSlug = trim($pathInfo);
 }
 
-// 3. using a list of valid characters, filter out all other characters from $rawPostSlug
-$validCharacters = '/[^ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\-_ ]/';
+// 3. using a list of valid characters, filter out all other characters from 
+//    $rawPostSlug, and replace invalid characters with a - character
+$validCharacters = '/[^ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\-_]/';
 $postSlug = preg_replace($validCharacters, '-', $rawPostSlug);
 
 // 4. define the empty case
@@ -48,7 +53,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
 	
 	// 1. check if name is supplied
 	if(isset($_POST['name']) && !empty($_POST['name'])) {
-		$name = $_POST['name'];
+		$name = trim($_POST['name']);
 	} else {
 		getComments(true, 'Name has to be supplied', $commentData);
 		return;
@@ -56,7 +61,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
 	
 	// 2. check if comment is supplied
 	if(isset($_POST['comment']) && !empty($_POST['comment'])) {
-		$comment = $_POST['comment'];
+		$comment = trim($_POST['comment']);
 	} else {
 		getComments(true, 'Comment has to be supplied', $commentData);
 		return;
@@ -224,10 +229,7 @@ global $postSlug;
 html,input,textarea{font-size:1rem;font-family:sans-serif;}
 .comments {max-height:500px;overflow:auto;}
 .comment{overflow:hidden;}
-h1,h2 {
-	margin-top: 0;
-	margin-bottom: .5rem;
-}
+h1,h2 {margin-top:0;margin-bottom:.5rem;}
 .user,.message{word-wrap:break-word;}
 input,textarea{padding:4px;border:1px solid #999999;border-radius:3px;line-height:1;}
 input[type=submit]{background:#ffbcff;border:0;color:black;padding:7px 10px;cursor:pointer;}
@@ -238,11 +240,11 @@ input[type=submit]{background:#ffbcff;border:0;color:black;padding:7px 10px;curs
 
 // 2. draw a message
 if($posted) {
-	echo '<div class="message">' . "\n";
+	echo '<div class="message">';
 	if($postedErrorMessage === NULL) {
-		echo '	<strong>Comment Posted!</strong>';
+		echo '<strong>Comment Posted!</strong>';
 	} else {
-		echo '	<strong>ERROR: ' . $postedErrorMessage . '</strong>';
+		echo '<strong>ERROR: ' . $postedErrorMessage . '</strong>';
 	}
 	echo "</div>\n<br>";
 }
@@ -274,14 +276,10 @@ if(count($comments) == 0) {
 	foreach($comments as $i => $comment) {
 ?>
 	<article class="comment">
-		
-		
 		<div class="user">
 			From: <strong><?= htmlspecialchars($comment['commentor']); ?></strong>
 		</div>
-		<div class="message">
-			<?= htmlspecialchars($comment['comment']); ?>
-		</div>
+		<div class="message"><?= htmlspecialchars($comment['comment']); ?></div>
 		<div>
 			<em><?= getAgoStr($comment['datetime_'], 3); ?></em>
 		</div>
