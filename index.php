@@ -15,27 +15,38 @@ if(
 	!empty($_GET['slug']) && 
 	gettype($_GET['slug']) == 'string'
 ) {
-	$postSlug = $_GET['slug'];
+	$rawPostSlug = $_GET['slug'];
 } else {
 	if(!isset($_SERVER['PATH_INFO'])) {
 		$pathInfo = '/';
 	} else {
 		$pathInfo = $_SERVER['PATH_INFO'];
 	}
-	$postSlug = $pathInfo;
+	// Remove the first character (/)
+	$pathInfo = substr($pathInfo, 1);
+	$rawPostSlug = $pathInfo;
 }
 
-// 3. start the database connection
+// 3. using a list of valid characters, filter out all other characters from $rawPostSlug
+$validCharacters = '/[^ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\-_ ]/';
+$postSlug = preg_replace($validCharacters, '-', $rawPostSlug);
+
+// 4. define the empty case
+if($postSlug == '') {
+	$postSlug = 'Home';
+}
+
+// 5. start the database connection
 $dbh = new PDO('sqlite:main.db');
 
-// 4. setup vars to restore previous formdata, in case of errors
+// 6. setup vars to restore previous formdata, in case of errors
 $commentData = ['name' => '', 'comment' => ''];
 $emptyCommentData = $commentData;
 
-// 5. handle the posting of a new comment
+// 7.A. handle the posting of a new comment
 if($_SERVER['REQUEST_METHOD'] === 'POST') {
 	
-	// 5.1. check if name is supplied
+	// 1. check if name is supplied
 	if(isset($_POST['name']) && !empty($_POST['name'])) {
 		$name = $_POST['name'];
 	} else {
@@ -43,7 +54,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
 		return;
 	}
 	
-	// 5.2. check if comment is supplied
+	// 2. check if comment is supplied
 	if(isset($_POST['comment']) && !empty($_POST['comment'])) {
 		$comment = $_POST['comment'];
 	} else {
@@ -51,7 +62,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
 		return;
 	}
 	
-	// 5.3. type check name and comment
+	// 3. type check name and comment
 	if(
 		gettype($name) != 'string' ||
 		gettype($comment) != 'string'
@@ -60,11 +71,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
 		return;
 	}
 	
-	// 5.4. set the commentdata, so that it will be retrieved
+	// 4. set the commentdata, so that it will be retrieved
 	$commentData['name'] = $name;
 	$commentData['comment'] = $comment;
 	
-	// 5.5. test the name for a minimum and maximum length
+	// 5. test the name for a minimum and maximum length
 	$nameLength = strlen($name);
 	if(strlen($name) < 4) {
 		getComments(true, 'Name cannot be shorter than 4 characters, it is currently ' . $nameLength . ' characters long', $commentData);
@@ -75,7 +86,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
 		return;
 	}
 	
-	// 5.6. test the comment for a minimum and maximum length
+	// 6. test the comment for a minimum and maximum length
 	$commentLength = strlen($comment);
 	if($commentLength < 10) {
 		getComments(true, 'Comment cannot be shorter than 10 characters, it is currently ' . $commentLength . ' characters long', $commentData);
@@ -87,63 +98,64 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
 	}
 	
 	
-	// 5.7. post the comment into the database
+	// 7. post the comment into the database
 	$stmt = $dbh->prepare('INSERT INTO comments (postslug, commentor, comment, datetime_) VALUES (:postslug, :name, :comment, :datetime_)');
 	
-	// 5.8. handle database error
+	// 8. handle database error
 	if($stmt === FALSE) {
 		writeError($dbh->errorInfo());
 		getComments(true, 'Something went wrong with the database', $commentData);
 		return;
 	}
 	
-	// 5.9. get a string of the current time
+	// 9. get a string of the current time
 	$nowDate = new DateTime();
 	$dateTimeStr = $nowDate->format('Y-m-d H:i:s');
 	
 	
 	
-	// 5.10. post the comment
+	// 10. post the comment
 	$res = $stmt->execute([':postslug' => $postSlug, ':name' => $name, ':comment' => $comment, ':datetime_' => $dateTimeStr]);
 	
-	// 5.11. if the posting goes wrong
+	// 11. if the posting goes wrong
 	if($res === FALSE) {
 		writeError($dbh->errorInfo());
 		getComments(true, 'Something went wrong with the database', $commentData);
 	}
 	
-	// 5.12. do the Post/Redirect/Get pattern. this prevents resubmit of the same form data when reloading the page
+	// 12. do the Post/Redirect/Get pattern. this prevents resubmit of the same form data when reloading the page
 	header('Location: '. getSelf(['post'=>'1'], null), true, 303);
 	echo '<a href="' . getSelf(['post'=>'1'], null) . '">Follow Post/Redirect/Get</a>';
 	exit();
 	
-} else {
-	// 6.A check for $_GET['post'] which is what we get back after the 303 succeeds after posting a comment.
+} else 
+// 7.B. handle the case where we don't post something
+{
+	// 1.A check for $_GET['post'] which is what we get back after the 303 succeeds after posting a comment.
 	//    if this is the case we can let the user know the comment was successfully posted
 	if(isset($_GET['post']) && $_GET['post'] === '1') {
 		getComments(true, NULL, $commentData);
-	} 
-	// 6.B else we just show the comments without showing any message
-	else {
-		
+	} else
+	// 1.B show the comments without showing any message
+	{
 		getComments(false, NULL, $commentData);
 	}
 }
 
-// 7. handle the retrieval of comments from the database, and show the template
+// 8. handle the retrieval of comments from the database, and show the template
 function getComments($posted, $postedErrorMessage, $commentData) {
-	// 7.1. get the globals
+	// 1. get the globals
 	global $dbh, $postSlug;
 	
-	// 7.2. Depending upon the route, we have to query different things. 
+	// 2. Depending upon the route, we have to query different things. 
 	//      Usually, we have to grab the table with the contents of the comments
 	$stmt = $dbh->prepare('SELECT commentor, comment, datetime_ FROM comments WHERE postslug = :postslug order by postid DESC');
 	
-	// 7.A statement is false code
+	// 3.A. statement is false code
 	if($stmt === false) {
 		$info = $dbh->errorInfo();
 		
-		// 7.3.1.A code for if the table does not exists yet
+		// 3.A.1.A. if the table does not exists yet (create it)
 		if($info[2] === 'no such table: comments') {
 			// create it
 			$stmt = $dbh->query(
@@ -164,28 +176,30 @@ function getComments($posted, $postedErrorMessage, $commentData) {
 				writeError($dbh->errorInfo());
 			}
 			
-		} else {
-			// 7.3.1.B write the error if the code is different, and show empty comments
+		} else
+		// 3.A.1.B. if the code does exist, yet something else went wrong, write
+		// an error, and show an error, and display no comments
+		{
 			writeError($info);
 			drawComments([], true, 'Something went wrong with the database', $commentData);
 			return;
 		}
-	}
-	// 7.B when the statement was successfull, AKA: proceed with getting the comments
-	else {
-		
-		// 7.B.1 execute the statement and get the statementResult
+	} else
+	// 3.B. when the statement was successfull, AKA: proceed with getting the comments
+	{
+		// 3.B.1 execute the statement and get the statementResult
 		$stres = $stmt->execute([':postslug' => $postSlug]);
 		
-		// 7.B.A if the statement result is false
+		// 3.B.2.A if the statement result is false
 		if($stres === false) {
 			// write the error
 			writeError($dbh->errorInfo());
 			// draw empty comments
 			drawComments([], true, 'Something went wrong with the database', $commentData);
 			return;
-		} else {
-			// 7.B.B fetch the results, and draw the comments
+		} else 
+		// 3.B.2.B fetch the results, and draw the comments
+		{
 			$dataArr = $stmt->fetchALL();
 			drawComments($dataArr, $posted, $postedErrorMessage, $commentData);
 			return;
@@ -194,18 +208,18 @@ function getComments($posted, $postedErrorMessage, $commentData) {
 }
 
 
-// 8. handle the entire template
+// 9. handle the entire template
 function drawComments($comments, $posted, $postedErrorMessage, $commentData) {
 global $postSlug;
-// 8.1. draw the first stuff
+// 1. draw the first stuff
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="These are the comments for the <?= $postSlug ?> page.">
-<title>Comments for <?= $postSlug ?></title>
+<meta name="description" content="These are the comments for the <?= htmlspecialchars($postSlug) ?> page.">
+<title>Comments for <?= htmlspecialchars($postSlug) ?></title>
 <style>
 html,input,textarea{font-size:1rem;font-family:sans-serif;}
 .comments {max-height:500px;overflow:auto;}
@@ -222,7 +236,7 @@ input[type=submit]{background:#ffbcff;border:0;color:black;padding:7px 10px;curs
 <body>
 <?php
 
-// 8.4. draw a message
+// 2. draw a message
 if($posted) {
 	echo '<div class="message">' . "\n";
 	if($postedErrorMessage === NULL) {
@@ -236,7 +250,7 @@ if($posted) {
 <a href="#postform">Skip to post comment</a>
 <h1>Comments</h1>
 <?php
-// 8.2. draw $_SERVER and $_POST for debug
+// 3. draw $_SERVER and $_POST for debug
 if(false) {
 	echo '<pre>';
 	var_export($_SERVER);
@@ -252,7 +266,7 @@ if(false) {
 	echo '</pre>';
 }
 
-// 8.3. draw comments
+// 4. draw comments
 if(count($comments) == 0) {
 	echo "<p>There are no comments yet.</p>\n";
 } else {
@@ -285,13 +299,13 @@ if(count($comments) == 0) {
 	<div>
 		<label for="name"><strong>Name</strong></label>
 		<br>
-		<input type="text" id="name" name="name" placeholder="john doe" value="<?= $commentData['name'] ?>" required>
+		<input type="text" id="name" name="name" placeholder="john doe" value="<?= htmlspecialchars($commentData['name']) ?>" required>
 	</div>
 	<br>
 	<div>
 		<label for="comment"><strong>Comment</strong></label>
 		<br>
-		<textarea name="comment" id="comment" cols="30" rows="4" placeholder="I really like this" required><?= $commentData['comment'] ?></textarea>
+		<textarea name="comment" id="comment" cols="30" rows="4" placeholder="I really like this" required><?= htmlspecialchars($commentData['comment']) ?></textarea>
 	</div>
 	<input type="submit" value="Post the comment">
 </form>
@@ -300,11 +314,14 @@ if(count($comments) == 0) {
 <?php
 } // end of function drawComments
 
+
 //
 // helper functions
 // 
 
-// 9. get the url itself, with or without some url params
+// 10. get the url itself, with or without some url params
+// @param add (associate array of 'key'=>value pair get params to add)
+// @param remove (array of string ['key', 'keys'], of which get params to remove)
 function getSelf($add, $remove) {
 	// 1. get the protocol
 	$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? 'https://' : 'http://';
@@ -410,11 +427,16 @@ function getAgoStr($datetime, $detailLevel) {
 	// 5. slice it till the detail level (so we won't get more than it)
 	$sliced = array_slice($arr, 0, $detailLevel);
 	
-	// 6. define an exception for just now
-	if(count($sliced) == 0 || (count($sliced) == 1 && isset($sliced['seconds']))) {
-		if($sliced['seconds'] < 5) {
-			return 'just now';
-		}
+	// 6. define an exception for 'just now'
+	if(
+		// no items
+		count($sliced) == 0 ||
+		// 1 item, which is second
+		(count($sliced) == 1 && isset($sliced['second'])) || 
+		// 1 item, which is seconds, and it happens to be less than 5
+		(count($sliced) == 1 && isset($sliced['seconds']) && $sliced['seconds'] < 5 )
+	) {
+		return 'just now';
 	}
 	
 	// 7. create the time string.
@@ -437,7 +459,7 @@ function getAgoStr($datetime, $detailLevel) {
 	return $agoStr;
 }
 
-// 12. write an error, this is for debugging of database errors.
+// 13. write an error, this is for debugging of database errors.
 function writeError($errorObj) {
 	$dateTimeStr = getDateTimeStr();
 	$errorStr = $dateTimeStr . ' :: ' .var_export($errorObj, true) . "\n\n";
